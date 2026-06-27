@@ -117,6 +117,12 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
 #btn-theme { background: none; border: none; cursor: pointer; font-size: 18px; padding: 4px; margin-left: 8px; border-radius: 6px; transition: background 0.15s; line-height: 1; display: flex; align-items: center; height: 28px; }
 #btn-theme:hover { background: var(--bg3); }
 
+/* HAMBURGER + DRAWER BACKDROP (mobile only) */
+#hamburger { display: none; background: none; border: none; cursor: pointer; font-size: 22px; color: var(--text); padding: 2px 6px; line-height: 1; align-items: center; flex-shrink: 0; }
+#hamburger:hover { color: var(--accent); }
+#sidebar-backdrop { display: none; position: fixed; inset: 0; z-index: 250; background: rgba(0,0,0,0.45); }
+#sidebar-backdrop.open { display: block; }
+
 /* LAYOUT */
 #layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
@@ -283,7 +289,40 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-@media (max-width: 640px) { #sidebar { display: none; } #main-panel { padding: 14px; } }
+@media (max-width: 640px) {
+  #hamburger { display: flex; }
+
+  #top-nav { padding: 0 8px; }
+  #masthead { padding: 10px 12px 8px; gap: 8px; align-items: center; }
+  #masthead h1 { font-size: 17px; }
+  #masthead-tag { font-size: 9px; margin-bottom: 2px; }
+  #masthead-source { display: none; }
+  #masthead-controls { gap: 6px; padding-top: 0; }
+  #progress-pill { display: none; }
+  #btn-test { padding: 6px 14px; }
+
+  /* sidebar becomes a slide-in drawer */
+  #sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 300;
+    width: 264px; min-width: 264px; max-width: 82vw;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 2px 0 18px rgba(0,0,0,0.35);
+  }
+  #sidebar.open { transform: translateX(0); }
+
+  #main-panel { padding: 14px; }
+  #tab-bar { overflow-x: auto; scrollbar-width: none; }
+  #tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn { padding: 8px 12px; white-space: nowrap; }
+
+  /* language sub-nav opens on tap instead of hover */
+  .nav-dropdown.open #sub-nav { display: flex; }
+
+  /* modals fill more of the small screen */
+  #test-modal, #study-modal { padding: 8px; }
+  #test-modal-inner, #study-modal-inner { padding: 20px 16px; }
+}
 
 /* ── W3SCHOOLS CONTENT — exact colours from their live site ── */
 #panel-concept {
@@ -433,6 +472,7 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
 </nav>
 
 <div id="masthead">
+  <button id="hamburger" aria-label="Open topics menu" title="Topics">&#9776;</button>
   <div id="masthead-left">
     <div id="masthead-tag">MHC ASSISTANT PROGRAMMER &nbsp;·&nbsp; EXAM PREP</div>
     <h1 id="page-title"></h1>
@@ -444,6 +484,7 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
   </div>
 </div>
 
+<div id="sidebar-backdrop"></div>
 <div id="layout">
   <div id="sidebar">
     <div id="sidebar-label"><span id="sidebar-lang-label"></span> TOPICS</div>
@@ -1678,8 +1719,28 @@ document.querySelectorAll('#sub-nav .sub-link[data-lang]').forEach(a => {
   a.addEventListener('click', () => switchLang(a.dataset.lang));
 });
 
+/* MOBILE DRAWER + TAP DROPDOWN */
+const _sidebarEl = document.getElementById('sidebar');
+const _backdropEl = document.getElementById('sidebar-backdrop');
+function closeSidebar() { _sidebarEl.classList.remove('open'); _backdropEl.classList.remove('open'); }
+function toggleSidebar() {
+  const open = _sidebarEl.classList.toggle('open');
+  _backdropEl.classList.toggle('open', open);
+}
+document.getElementById('hamburger').addEventListener('click', toggleSidebar);
+_backdropEl.addEventListener('click', closeSidebar);
+
+// On touch, the language group reveals its sub-nav (HTML/CSS/...) on tap instead of hover.
+const _navDropdown = document.querySelector('.nav-dropdown');
+const _groupLink = document.querySelector('.nav-dropdown .nav-link[data-group]');
+if (_groupLink) _groupLink.addEventListener('click', () => _navDropdown.classList.toggle('open'));
+document.querySelectorAll('#sub-nav .sub-link').forEach(a =>
+  a.addEventListener('click', () => _navDropdown.classList.remove('open')));
+
 function switchLang(lang) {
   currentLang = lang;
+  closeSidebar();
+  _navDropdown.classList.remove('open');
   updateNav(lang);
   currentPageKey = LANGUAGES[lang].pages[0].key;
   buildSidebar();
@@ -1744,6 +1805,7 @@ function buildSidebar() {
 /* NAVIGATION */
 function navTo(key) {
   currentPageKey = key;
+  closeSidebar();
   buildSidebar();
   renderMasthead();
   renderConceptPanel();
