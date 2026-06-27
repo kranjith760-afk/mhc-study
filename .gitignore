@@ -1,0 +1,7 @@
+# Ignore everything in this folder by default...
+/*
+
+# ...except the files the live GitHub Pages site actually needs:
+!.gitignore
+!index.html
+!css-content.js
