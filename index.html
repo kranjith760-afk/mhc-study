@@ -173,6 +173,23 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
 .tab-btn.active { color: var(--tab-active); border-bottom-color: var(--tab-active); }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; flex: 1; min-height: 0; overflow-y: auto; }
+#panel-links { padding: 4px 2px; }
+.links-add { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.links-add input { flex: 1; min-width: 140px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text); font-size: 0.95em; }
+.links-add button { padding: 8px 18px; border: none; border-radius: 6px; background: var(--accent); color: #fff; font-weight: bold; cursor: pointer; }
+.links-add button:hover { background: var(--accent-dark); }
+.links-list { list-style: none; padding: 0; margin: 0; }
+.links-list li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--card-bg); }
+.links-list a { flex: 1; color: var(--accent); text-decoration: none; word-break: break-all; }
+.links-list a:hover { text-decoration: underline; }
+.links-remove { border: none; background: var(--incorrect, #e74c3c); color: #fff; width: 24px; height: 24px; border-radius: 50%; cursor: pointer; font-weight: bold; line-height: 1; flex-shrink: 0; }
+.links-empty { color: var(--text3); font-style: italic; }
+.links-footer { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.links-pub-btn { padding: 8px 16px; border: none; border-radius: 6px; background: var(--accent); color: #fff; font-weight: bold; cursor: pointer; }
+.links-pub-btn:hover { background: var(--accent-dark); }
+.links-reset-btn { margin-left: 8px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); color: var(--text2); cursor: pointer; }
+.links-status { display: inline-block; padding: 8px 12px; color: var(--correct, #2e7d32); font-weight: bold; font-size: 0.9em; }
+.links-hint { margin: 10px 0 0; font-size: 0.85em; color: var(--text3); }
 
 /* CONCEPT CARD (placeholder) */
 .concept-card {
@@ -496,6 +513,7 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
       <button class="tab-btn active" data-tab="concept">CORE CONCEPT</button>
       <button class="tab-btn" data-tab="mcqtest">MCQ TEST</button>
       <button class="tab-btn" data-tab="abbr">ABBREVIATIONS</button>
+      <button class="tab-btn" data-tab="links">LINKS</button>
     </div>
     <div id="panel-concept" class="tab-panel active"></div>
     <div id="panel-mcqtest" class="tab-panel">
@@ -530,6 +548,7 @@ body { font-family: Verdana, Geneva, sans-serif; background: var(--bg); color: v
       </div>
     </div>
     <div id="panel-abbr" class="tab-panel"></div>
+    <div id="panel-links" class="tab-panel"></div>
   </div>
 </div>
 
@@ -1749,6 +1768,7 @@ function switchLang(lang) {
   renderConceptPanel();
   renderMcqTestPanel();
   renderAbbrPanel();
+  renderLinksPanel();
   setTab('concept');
 }
 
@@ -1812,6 +1832,7 @@ function navTo(key) {
   renderConceptPanel();
   renderMcqTestPanel();
   renderAbbrPanel();
+  renderLinksPanel();
   setTab('concept');
 }
 
@@ -1981,6 +2002,191 @@ function renderAbbrPanel() {
   if (btn) btn.style.display = html ? '' : 'none';
   const panel = document.getElementById('panel-abbr');
   if (panel) panel.innerHTML = html ? sanitizeConceptHTML(html) : '';
+}
+
+/* LINKS — author-curated reference links, stored as JSON (links.json).
+   - Published file: links.json (committed to git) → fetched on load so ALL users see the links.
+   - Add/Remove edit an in-memory copy, cached in localStorage so edits survive reloads.
+   - "Connect links.json (auto-save)" uses the File System Access API (Chrome/Edge) to write
+     links.json in your project folder on every change — then just commit/push from VS Code.
+   - "Download links.json" is the fallback for browsers without that API.
+   Keyed by "<subject>:<topic>". */
+const LINKS_DRAFT_KEY = 'study-links-draft';
+let linksData = {};
+let publishedLinks = {};
+let linksFileHandle = null;
+
+function linksKey() { return currentLang + ':' + currentPageKey; }
+function getLinks() { return linksData[linksKey()] || []; }
+function escapeLinkHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function hasLinksDraft() { return !!localStorage.getItem(LINKS_DRAFT_KEY); }
+function loadLinksDraft() {
+  try { const d = localStorage.getItem(LINKS_DRAFT_KEY); if (d) return JSON.parse(d) || {}; } catch (e) {}
+  return null;
+}
+function persistLinksDraft() {
+  Object.keys(linksData).forEach(k => { if (!linksData[k] || !linksData[k].length) delete linksData[k]; });
+  try { localStorage.setItem(LINKS_DRAFT_KEY, JSON.stringify(linksData)); } catch (e) {}
+}
+function linksFileContent() {
+  const tidy = {};
+  Object.keys(linksData).sort().forEach(k => { if (linksData[k] && linksData[k].length) tidy[k] = linksData[k]; });
+  return JSON.stringify(tidy, null, 2) + '\n';
+}
+
+/* ---- File System Access API: write links.json directly to the project folder ---- */
+function fsaSupported() { return typeof window.showOpenFilePicker === 'function'; }
+async function connectLinksFile() {
+  if (!fsaSupported()) { alert('Direct file saving needs Chrome or Edge. Use "Download links.json" instead.'); return; }
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: [{ description: 'JSON file', accept: { 'application/json': ['.json'] } }]
+    });
+    linksFileHandle = handle;
+    await idbSetHandle(handle);
+    await saveLinksToFile();
+    renderLinksPanel();
+  } catch (e) { /* user cancelled the picker */ }
+}
+async function saveLinksToFile() {
+  if (!linksFileHandle) return false;
+  try {
+    let perm = await linksFileHandle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await linksFileHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') return false;
+    const w = await linksFileHandle.createWritable();
+    await w.write(linksFileContent());
+    await w.close();
+    return true;
+  } catch (e) { return false; }
+}
+async function restoreLinksFileHandle() {
+  try {
+    const h = await idbGetHandle();
+    if (h) { linksFileHandle = h; }
+  } catch (e) {}
+}
+/* tiny IndexedDB store so the chosen file is remembered across reloads */
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('study-links-db', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('handles');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbSetHandle(h) {
+  try { const db = await idbOpen(); db.transaction('handles', 'readwrite').objectStore('handles').put(h, 'links'); } catch (e) {}
+}
+async function idbGetHandle() {
+  try {
+    const db = await idbOpen();
+    return await new Promise(res => {
+      const rq = db.transaction('handles', 'readonly').objectStore('handles').get('links');
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => res(null);
+    });
+  } catch (e) { return null; }
+}
+
+/* ---- load published links.json on startup ---- */
+function fetchPublishedLinks() {
+  return fetch('links.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : {})
+    .then(j => { publishedLinks = j || {}; })
+    .catch(() => { publishedLinks = {}; });
+}
+async function initLinks() {
+  const draft = loadLinksDraft();
+  await fetchPublishedLinks();
+  linksData = draft || JSON.parse(JSON.stringify(publishedLinks));
+  await restoreLinksFileHandle();
+  renderLinksPanel();
+}
+
+function renderLinksPanel() {
+  const panel = document.getElementById('panel-links');
+  if (!panel) return;
+  const links = getLinks();
+  let html = '<div class="links-add">'
+    + '<input type="text" id="link-title" placeholder="Title (optional)">'
+    + '<input type="url" id="link-url" placeholder="https://example.com">'
+    + '<button type="button" id="link-add-btn">Add</button>'
+    + '</div>';
+  if (!links.length) {
+    html += '<p class="links-empty">No reference links yet for this topic. Add one above.</p>';
+  } else {
+    html += '<ul class="links-list">' + links.map((l, i) =>
+      '<li><a href="' + escapeLinkHtml(l.url) + '" target="_blank" rel="noopener">'
+      + escapeLinkHtml(l.title || l.url) + '</a>'
+      + '<button type="button" class="links-remove" data-i="' + i + '" title="Remove">&times;</button></li>'
+    ).join('') + '</ul>';
+  }
+  html += '<div class="links-footer">';
+  if (fsaSupported()) {
+    html += linksFileHandle
+      ? '<span class="links-status">&#9679; Auto-saving to ' + escapeLinkHtml(linksFileHandle.name) + '</span>'
+      : '<button type="button" id="link-connect-btn" class="links-pub-btn">&#128279; Connect links.json (auto-save)</button>';
+  }
+  html += '<button type="button" id="link-download-btn" class="links-reset-btn">&#11015; Download links.json</button>';
+  if (hasLinksDraft()) html += '<button type="button" id="link-reset-btn" class="links-reset-btn">Reset to published</button>';
+  html += fsaSupported()
+    ? '<p class="links-hint">Connect <strong>links.json</strong> once — then every Add/Remove writes the file in your project folder. Commit &amp; push from VS Code.</p>'
+    : '<p class="links-hint">Add/remove links, then <strong>Download links.json</strong>, replace it in your project, and push.</p>';
+  html += '</div>';
+  panel.innerHTML = html;
+  const addBtn = document.getElementById('link-add-btn');
+  if (addBtn) addBtn.addEventListener('click', addLink);
+  const urlInput = document.getElementById('link-url');
+  if (urlInput) urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') addLink(); });
+  panel.querySelectorAll('.links-remove').forEach(b =>
+    b.addEventListener('click', () => removeLink(parseInt(b.dataset.i, 10)))
+  );
+  const cb = document.getElementById('link-connect-btn');
+  if (cb) cb.addEventListener('click', connectLinksFile);
+  const dl = document.getElementById('link-download-btn');
+  if (dl) dl.addEventListener('click', downloadLinksFile);
+  const rs = document.getElementById('link-reset-btn');
+  if (rs) rs.addEventListener('click', resetLinksToPublished);
+}
+async function addLink() {
+  const titleEl = document.getElementById('link-title');
+  const urlEl = document.getElementById('link-url');
+  if (!urlEl) return;
+  let url = (urlEl.value || '').trim();
+  if (!url) { urlEl.focus(); return; }
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+  const title = titleEl ? (titleEl.value || '').trim() : '';
+  const key = linksKey();
+  if (!linksData[key]) linksData[key] = [];
+  linksData[key].push({ title: title, url: url });
+  persistLinksDraft();
+  renderLinksPanel();
+  if (linksFileHandle) await saveLinksToFile();
+}
+async function removeLink(i) {
+  const key = linksKey();
+  const arr = linksData[key];
+  if (!arr || i < 0 || i >= arr.length) return;
+  arr.splice(i, 1);
+  persistLinksDraft();
+  renderLinksPanel();
+  if (linksFileHandle) await saveLinksToFile();
+}
+function resetLinksToPublished() {
+  localStorage.removeItem(LINKS_DRAFT_KEY);
+  linksData = JSON.parse(JSON.stringify(publishedLinks));
+  renderLinksPanel();
+}
+function downloadLinksFile() {
+  const blob = new Blob([linksFileContent()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'links.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /* MCQ TEST */
@@ -2300,6 +2506,7 @@ renderMasthead();
 renderConceptPanel();
 renderMcqTestPanel();
 renderAbbrPanel();
+initLinks();
 </script>
 </body>
 </html>
