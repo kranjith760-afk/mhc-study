@@ -2999,6 +2999,19 @@ function linksFileContent() {
   Object.keys(linksData).sort().forEach(k => { if (linksData[k] && linksData[k].length) tidy[k] = linksData[k]; });
   return JSON.stringify(tidy, null, 2) + '\n';
 }
+/* Merge: published defaults are always the base; user-added links overlay on top
+   (deduped by URL). This guarantees newly published defaults load for everyone,
+   even users who already have a local draft. */
+function mergeLinks(base, extra) {
+  const out = JSON.parse(JSON.stringify(base || {}));
+  Object.keys(extra || {}).forEach(k => {
+    if (!Array.isArray(extra[k])) return;
+    if (!out[k]) out[k] = [];
+    const seen = new Set(out[k].map(l => l && l.url));
+    extra[k].forEach(l => { if (l && l.url && !seen.has(l.url)) { out[k].push(l); seen.add(l.url); } });
+  });
+  return out;
+}
 
 /* ---- File System Access API: write links.json directly to the project folder ---- */
 function fsaSupported() { return typeof window.showOpenFilePicker === 'function'; }
@@ -3065,7 +3078,7 @@ function fetchPublishedLinks() {
 async function initLinks() {
   const draft = loadLinksDraft();
   await fetchPublishedLinks();
-  linksData = draft || JSON.parse(JSON.stringify(publishedLinks));
+  linksData = mergeLinks(publishedLinks, draft);
   await restoreLinksFileHandle();
   renderLinksPanel();
 }
