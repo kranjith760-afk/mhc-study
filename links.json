@@ -3,13 +3,27 @@
     {
       "title": "title",
       "url": "https://www.youtube.com/watch?v=xlR503Vgpyo"
-    },
+    }
+  ],
+  "cloud:abbreviations": [
+    {
+      "title": "test",
+      "url": "https://www.youtube.com/watch?v=xlR503Vgpyo"
+    }
+  ],
+  "cloud:all": [
     {
       "title": "test",
       "url": "https://www.youtube.com/watch?v=xlR503Vgpyo"
     }
   ],
   "networks:all": [
+    {
+      "title": "test",
+      "url": "https://www.youtube.com/watch?v=xlR503Vgpyo"
+    }
+  ],
+  "software_tools:all": [
     {
       "title": "test",
       "url": "https://www.youtube.com/watch?v=xlR503Vgpyo"
