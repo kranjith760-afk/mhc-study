@@ -23,6 +23,20 @@
       "url": "https://www.youtube.com/watch?v=xlR503Vgpyo"
     }
   ],
+  "networks:osi": [
+    {
+      "title": "1",
+      "url": "https://www.youtube.com/watch?v=PIQfqYgjZOE"
+    },
+    {
+      "title": "2",
+      "url": "https://www.youtube.com/watch?v=Sn4nU7kSwEU"
+    },
+    {
+      "title": "3",
+      "url": "https://www.youtube.com/watch?v=-s2miahWQuQ"
+    }
+  ],
   "software_tools:all": [
     {
       "title": "test",
